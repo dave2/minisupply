@@ -42,12 +42,12 @@
  *  \brief  Contains the abstraction of a hardware port
  */
 typedef struct {
-		USART_t *hw;            /**< USART IO registers */
+		USART_t *hw;            /**< USART hardware IO registers */
 		ringbuffer_t *txring;   /**< TX ringbuffer */
 		ringbuffer_t *rxring;   /**< RX ringbuffer */
 		uint8_t isr_level;     /**< Level to run/restore interrupts at */
 		uint8_t rxflag;        /**< Flag to apply when this port has an RX event */
-		uint8_t cmdflag;       /**< Flag to apply when we see a \n in the stream */
+		uint8_t cmdflag;       /**< Flag to apply when we see a \\n in the stream */
 		uint8_t features;      /**< Capabilities of the port, see PORT_* macros */
 } serial_port_t;
 

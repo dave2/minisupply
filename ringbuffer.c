@@ -16,6 +16,19 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+/** \file
+ *  \brief Ringbuffer implementation
+ *
+ *  Ringbuffers are circular buffer which can be read from or written to,
+ *  with independant read and write pointers. They must be sized by a power
+ *  of two, since this implementation uses simple bit masking to implement
+ *  wrapping.
+ *
+ *  Functions come in normal and 'unsafe' version. In the unsafe versions you
+ *  must ensure that no concurrent access to a single ringbuffer is possible.
+ *  The normal (safe) versions implement this with global interrupt disable,
+ *  which is blunt but effective.
+ */
 
 #include <stdio.h>
 #include <avr/interrupt.h>
