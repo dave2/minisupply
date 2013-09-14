@@ -19,46 +19,99 @@
 #ifndef SERIAL_H_INCLUDED
 #define SERIAL_H_INCLUDED
 
+#define S_FEAT_NONE 0 /**< Serial port feature: None */
+#define S_FEAT_ECHO 1 /**< Serial port feature: echoback inside driver */
+#define S_FEAT_CMD 2 /**< Serial port feature: report seeing \\n */
+
+#define S_PARITY_NONE 0 /**< No parity */
+#define S_PARITY_EVEN 1 /**< Even parity */
+#define S_PARITY_ODD 2 /**< Odd Parity */
+
 /* initalise serial port X */
-/** \brief Initalise the first serial port
+/** \brief Initalise the given serial port with the sized buffers
+ *  \param portnum Number of the port
+ *  \param rx_size Size of the RX buffer (must be power of two)
+ *  \param tx_size Size of the TX buffer (must be power of two)
+ *  \return 1 for success, 0 otherwise
  */
-uint8_t serial0_init(void);
-/** \brief Iniitalise the second serial port
+uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
+
+/** \brief Set parameters for the port, speed and such like
+ *  \param portnum Number of the port
+ *  \param baud Baudrate
+ *  \param bits Bits per char (note: 9 is not supported)
+ *  \param stop Stop bits
+ *  \param parity Parity mode (see S_PARITY_*)
+ *  \param features Features (see S_FEAT_*)
+ *  \return 1 for success, 0 otherwise
  */
-uint8_t serial1_init(void);
+uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
+                    uint8_t stop, uint8_t parity, uint8_t features);
 
-/* flush the serial port, clearing any buffered packets */
-void serial0_flush(void);
-void serial1_flush(void);
+/** \brief Start listening for events and characters, also allows
+ *  TX to begin
+ *  \param portnum Number of the port
+ *  \param state 1 = run, 0 = suspend
+ */
+void serial_run(uint8_t portnum, uint8_t state);
 
-/* single character send */
-uint8_t serial0_tx_cout(char s);
-uint8_t serial1_tx_cout(const char s);
+/** \brief Flush the buffers for the serial port
+ *  \param portnum Number of the port
+ */
+void serial_flush(uint8_t portnum);
 
-/* send a string from SRAM */
-uint8_t serial0_tx(const char *str, uint8_t len);
-uint8_t serial1_tx(const char *str, uint8_t len);
+/** \brief Send a single character to a serial port
+ *  \param portnum Number of the port
+ *  \param s Character to send
+ */
+uint8_t serial_tx_cout(uint8_t portnum, char s);
 
-/* send a string from PGM space */
-uint8_t serial0_tx_PGM(const char *str);
-uint8_t serial1_tx_PGM(const char *str);
+/** \brief Send a string to a serial port
+ *  \param portnum Number of the port
+ *  \param str String to send (does not need NUL termination)
+ *  \param len Length of the string
+ */
+uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len);
 
-/* send a simple number has hex */
-uint8_t serial0_tx_hex(uint8_t s);
-uint8_t serial1_tx_hex(uint8_t s);
+/** \brief Send a string to a serial port from flash space
+ *  \param portnum Number of the port
+ *  \param str String to send (must be in flash, must be NUL terminated)
+ */
+uint8_t serial_tx_PGM(uint8_t portnum, const char *str);
 
-/* decimal */
-uint8_t serial0_tx_dec(uint32_t s);
-uint8_t serial1_tx_dec(uint32_t s);
+/** \brief Send a number as a hexidecimal string to a serial port
+ *  \param portnum Number of the port
+ *  \param s Value to convert to string and send
+ */
+uint8_t serial_tx_hex(uint8_t portnum, uint8_t s);
 
-/* CRs */
-uint8_t serial0_tx_cr(void);
-uint8_t serial1_tx_cr(void);
+/** \brief Send a number as a decimal string to a serial port
+ *  \param portnum Number of the port
+ *  \param s Value to convert to string and send
+ */
+uint8_t serial_tx_dec(uint8_t portnum, uint32_t s);
 
-/* Receive a character */
-uint8_t serial0_rx(void);
-uint8_t serial1_rx(void);
+/** \brief Send a newline/return to a serial port
+ *  \param portnum Number of the port
+ */
+uint8_t serial_tx_cr(uint8_t portnum);
 
-void serial0_echo(uint8_t mode);
+/** \brief Test if there are unread characters in the buffer
+ *  \param portnum Number of the port
+ *  \param features Only return if the given feature is triggered.
+ *          This will reset the flag for the feature.
+ *  \return 1 if there are unread characters, 0 otherwise
+ */
+uint8_t serial_rx_available(uint8_t portnum, uint8_t features);
+
+/** \brief Return a single character from the port.
+ *
+ *  Since this has to be binary_safe, call serial_rx_available() before
+ *  call this, since otherwise you'll get garbage
+ *
+ *  \param portnum Number of the port
+ *  \return The character
+ */
+uint8_t serial_rx(uint8_t portnum);
 
 #endif // SERIAL_H_INCLUDED
