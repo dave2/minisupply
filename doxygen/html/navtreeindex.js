@@ -1,0 +1,23 @@
+var NAVTREEINDEX =
+{
+"index.html":[],
+"annotated.html":[0,0],
+"structringbuffer__t.html":[0,0,0],
+"structserial__port__t.html":[0,0,1],
+"classes.html":[0,1],
+"functions.html":[0,2,0],
+"functions_vars.html":[0,2,1],
+"files.html":[1,0],
+"adc_8c.html":[1,0,0],
+"adc_8h.html":[1,0,1],
+"global_8h.html":[1,0,2],
+"main_8c.html":[1,0,3],
+"ringbuffer_8c.html":[1,0,4],
+"ringbuffer_8h.html":[1,0,5],
+"serial_8c.html":[1,0,6],
+"serial_8h.html":[1,0,7],
+"globals.html":[1,1,0],
+"globals_func.html":[1,1,1],
+"globals_vars.html":[1,1,2],
+"globals_defs.html":[1,1,3]
+};

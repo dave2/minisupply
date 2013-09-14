@@ -1,0 +1,8 @@
+This is the firmware source code to miniSupply.
+
+miniSupply is a microcontroller-based Switch Mode Power Supply board
+designed for hobbyists. The schematics, PCB design, and this firmware
+are open source.
+
+Note: this is in a high rate of development and should not be trusted
+at present for real usage.
