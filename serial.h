@@ -33,16 +33,19 @@
 #define S_FEAT_NONE 0 /**< Serial port feature: None */
 #define S_FEAT_ECHO 1 /**< Serial port feature: echoback inside driver */
 
-#define S_PARITY_NONE 0 /**< No parity */
-#define S_PARITY_EVEN 1 /**< Even parity */
-#define S_PARITY_ODD 2 /**< Odd Parity */
+/** \brief Enum for parity types */
+typedef enum {
+    none, /**< No parity */
+    even, /**< Even parity */
+    odd   /**< Odd parity */
+} parity_t;
 
 /* initalise serial port X */
 /** \brief Initalise the given serial port with the sized buffers
  *  \param portnum Number of the port
  *  \param rx_size Size of the RX buffer (must be power of two)
  *  \param tx_size Size of the TX buffer (must be power of two)
- *  \return 1 for success, 0 otherwise
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
 
@@ -51,12 +54,12 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
  *  \param baud Baudrate
  *  \param bits Bits per char (note: 9 is not supported)
  *  \param stop Stop bits
- *  \param parity Parity mode (see S_PARITY_*)
+ *  \param parity Parity mode (none, even, odd)
  *  \param features Features (see S_FEAT_*)
- *  \return 1 for success, 0 otherwise
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
-                    uint8_t stop, uint8_t parity, uint8_t features);
+                    parity_t parity, uint8_t stop, uint8_t features);
 
 /** \brief Provide an RX hook to the interrupt for a given port
  *
@@ -69,25 +72,26 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
  *  \param portnum Number of the port
  *  \param fn Function to execute. It must return void and accept
  *         a single uint8_t argument containing most recent char.
- *  \return 1 if hook loaded successfully, 0 if not
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t));
 
 /** \brief Start listening for events and characters, also allows
  *  TX to begin
  *  \param portnum Number of the port
- *  \param state 1 = run, 0 = suspend
+ *  \param state boolean, true or false
  */
-void serial_run(uint8_t portnum, uint8_t state);
+uint8_t serial_run(uint8_t portnum, bool_t state);
 
 /** \brief Flush the buffers for the serial port
  *  \param portnum Number of the port
  */
-void serial_flush(uint8_t portnum);
+uint8_t serial_flush(uint8_t portnum);
 
 /** \brief Send a single character to a serial port
  *  \param portnum Number of the port
  *  \param s Character to send
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx_cout(uint8_t portnum, char s);
 
@@ -95,29 +99,34 @@ uint8_t serial_tx_cout(uint8_t portnum, char s);
  *  \param portnum Number of the port
  *  \param str String to send (does not need NUL termination)
  *  \param len Length of the string
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len);
 
 /** \brief Send a string to a serial port from flash space
  *  \param portnum Number of the port
  *  \param str String to send (must be in flash, must be NUL terminated)
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx_PGM(uint8_t portnum, const char *str);
 
 /** \brief Send a number as a hexidecimal string to a serial port
  *  \param portnum Number of the port
  *  \param s Value to convert to string and send
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx_hex(uint8_t portnum, uint8_t s);
 
 /** \brief Send a number as a decimal string to a serial port
  *  \param portnum Number of the port
  *  \param s Value to convert to string and send
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx_dec(uint8_t portnum, uint32_t s);
 
 /** \brief Send a newline/return to a serial port
  *  \param portnum Number of the port
+ *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_tx_cr(uint8_t portnum);
 

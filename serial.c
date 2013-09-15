@@ -25,12 +25,12 @@
 #include <util/atomic.h>
 #include <stdlib.h>
 
-#include "serial.h"
-
 #include "global.h"
 #include <util/delay.h>
 
+#include "serial.h"
 #include "ringbuffer.h"
+#include "errors.h"
 
 /* internal flags */
 #define RX_READY 1
@@ -163,13 +163,15 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 
     if (ports[portnum] || portnum >= MAX_PORTS) {
         /* refuse to re-initalise a port or one not allocatable */
-        return 0;
+        errno = ENODEV;
+        return -1;
     }
 
 	/* create the metadata for the port */
 	ports[portnum] = malloc(sizeof(serial_port_t));
 	if (!ports[portnum]) {
-		return 0;
+        errno = ENOMEM;
+		return -1;
 	}
 
 	/* create two ringbuffers, one for TX and one for RX */
@@ -178,7 +180,8 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
     if (!ports[portnum]->rxring) {
 		free(ports[portnum]);
 		ports[portnum] = NULL;
-		return 0; /* FIXME: flag serial IO no longer works */
+		errno = ENOMEM;
+		return -1; /* FIXME: flag serial IO no longer works */
 	}
 
 	ports[portnum]->txring = ring_create(tx_size-1);
@@ -186,7 +189,8 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 		ring_destroy(ports[portnum]->rxring); /* since the first one succeeded */
 		free(ports[portnum]);
 		ports[portnum] = NULL;
-		return 0; /* FIXME: flag serial IO no longer works */
+		errno = ENOMEM;
+		return -1; /* FIXME: flag serial IO no longer works */
 	}
 
 	/* connect the hardware */
@@ -208,6 +212,12 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
     /* fixme: allow seperate interrupt levels for different ports */
 	ports[portnum]->isr_level = USART_DREINTLVL_LO_gc | USART_RXCINTLVL_LO_gc; /* low prio interrupt */
 
+	/* default callback is NULL */
+    ports[portnum]->rx_fn = NULL;
+
+    /* port has no features by default */
+    ports[portnum]->features = 0;
+
 	/* enable rx interrupts */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
 	ports[portnum]->hw->CTRLB |= USART_CLK2X_bm;
@@ -215,7 +225,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	/* make sure low-level interrupts are enabled. Note: you still need to enable global interrupts */
 	PMIC.CTRL |= PMIC_LOLVLEX_bm;
 
-	return 1;
+	return 0;
 }
 
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
@@ -226,7 +236,8 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
     uint16_t bsel;
 
     if (portnum > MAX_PORTS || !ports[portnum]) {
-        return 0;
+        errno = ENODEV;
+        return -1;
     }
     switch (bits) {
         case 5:
@@ -240,7 +251,8 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
             mode = 7; /* cheating! */
             break;
         default:
-            return 0;
+            errno = EINVAL;
+            return -1;
     }
     switch (stop) {
         case 0:
@@ -248,19 +260,21 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
             mode |= (stop & 1) << 3; /* more cheating */
             break;
         default:
-            return 0;
+            errno = EINVAL;
+            return -1;
     }
     switch (parity) {
-        case S_PARITY_NONE:
+        case none:
             break;
-        case S_PARITY_EVEN:
+        case even:
             mode |= (2 << 4);
             break;
-        case S_PARITY_ODD:
+        case odd:
             mode |= (3 << 4);
             break;
         default:
-            return 0;
+            errno = EINVAL;
+            return -1;
     }
     /* apply the cheating way we worked out the modes for the port */
     ports[portnum]->hw->CTRLC = mode;
@@ -268,14 +282,12 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
     /* apply features */
     ports[portnum]->features = features;
 
-    /* default callback is NULL */
-    ports[portnum]->rx_fn = NULL;
-
     /* the following code comes from:
      * http://blog.omegacs.net/2010/08/18/xmega-fractional-baud-rate-source-code/
      */
     if (baud > (F_CPU/16)) {
-        return 0;
+        errno = EBAUD;
+        return -1;
     }
 
     div1k = ((F_CPU*128) / baud) - 1024;
@@ -292,43 +304,46 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
     /* end nicely borrowed code! */
 
     /* all good! */
-    return 1;
+    return 0;
 }
 
-void serial_run(uint8_t portnum, uint8_t state) {
-    if (portnum > MAX_PORTS || !ports[portnum]) {
+uint8_t serial_run(uint8_t portnum, bool_t state) {
+    if (portnum >= MAX_PORTS || !ports[portnum]) {
         /* do nothing */
-        return;
+        errno = ENODEV;
+        return -1;
     }
     switch (state) {
-        case 0:
+        case false:
             /* disable the TX/RX sides */
             /* this will discard incoming traffic */
             ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
             /* don't worry about the interrupts, since we have disabled tx/rx */
             break;
-        case 1:
+        case true:
             /* re-enable the TX/RX sides */
             ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
             break;
     }
-    return;
+    return 0;
 }
 
 /* install a new callback */
 uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t)) {
     if (portnum > MAX_PORTS || !ports[portnum]) {
-        return 0;
+        errno = ENODEV;
+        return -1;
     }
     /* this is safe so long as RX is disabled */
     ports[portnum]->rx_fn = fn;
-    return 1;
+    return 0;
 }
 
-void serial_flush(uint8_t portnum) {
+uint8_t serial_flush(uint8_t portnum) {
 
-    if (portnum > MAX_PORTS || !ports[portnum]) {
-        return;
+    if (portnum >= MAX_PORTS || !ports[portnum]) {
+        errno = ENODEV;
+        return -1;
     }
 
     /* disable the TX/RX engines */
@@ -348,15 +363,16 @@ void serial_flush(uint8_t portnum) {
     /* re-enable the actual ports */
     ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
 
-	return;
+	return 0;
 }
 
 /* output a single char to a port */
 
 uint8_t serial_tx_cout(uint8_t portnum, char s) {
 
-	if (portnum > MAX_PORTS || !ports[portnum]) {
-		return 0 ;
+	if (portnum >= MAX_PORTS || !ports[portnum]) {
+        errno = ENODEV;
+		return -1;
 	}
 
 	/* disable interrupt while we write */
@@ -366,14 +382,15 @@ uint8_t serial_tx_cout(uint8_t portnum, char s) {
 
 	/* this re-enables DRE */
 	_usart_tx_run(ports[portnum]);
-	return 1;
+	return 0;
 }
 
 /* output a string of chars to a port (string is in RAM) */
 
 uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len) {
-	if (portnum > MAX_PORTS || !ports[portnum]) { /* safety checking on port state */
-		return 0;
+	if (portnum >= MAX_PORTS || !ports[portnum]) { /* safety checking on port state */
+        errno = ENODEV;
+		return -1;
 	}
 
 	/* disable interrupt while we write */
@@ -389,7 +406,7 @@ uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len) {
 
 	_usart_tx_run(ports[portnum]);
 
-	return 1;
+	return 0;
 }
 
 /* output a string of chars to a port (string is in FLASH) */
@@ -397,6 +414,11 @@ uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len) {
 uint8_t serial_tx_PGM(uint8_t portnum, const char *str) {
 	uint8_t n = 0;
 	char c;
+
+    if (portnum >= MAX_PORTS || !ports[portnum]) {
+        errno = ENODEV;
+        return -1;
+    }
 
 	/* disable interrupt while we write */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_DREINTLVL_gm));
@@ -410,7 +432,7 @@ uint8_t serial_tx_PGM(uint8_t portnum, const char *str) {
 
 	_usart_tx_run(ports[portnum]);
 
-	return 1;
+	return 0;
 }
 
 
@@ -419,8 +441,9 @@ uint8_t serial_tx_PGM(uint8_t portnum, const char *str) {
 uint8_t serial_rx(uint8_t portnum) {
 	char c;
 
-	if (portnum > MAX_PORTS || !ports[portnum]) { /* safety check on the port */
-		return 0; /* er, yeah, well.. *shrug* */
+	if (portnum >= MAX_PORTS || !ports[portnum]) { /* safety check on the port */
+        errno = ENODEV;
+		return -1; /* er, yeah, well.. *shrug* */
 	}
 
 	/* protect this from interrupts also writing into the buffer */
@@ -459,8 +482,9 @@ uint8_t serial_tx_dec(uint8_t portnum, uint32_t s) {
 	char a[11] = ""; /* 4294967296 */
 	uint8_t n = 0;
 
-	if (portnum > MAX_PORTS || !ports[portnum]) { /* init safety check */
-		return 0;
+	if (portnum >= MAX_PORTS || !ports[portnum]) { /* init safety check */
+        errno = ENODEV;
+		return -1;
 	}
 
 	ultoa(s, a, 10);
@@ -483,8 +507,9 @@ uint8_t serial_tx_cr(uint8_t portnum) {
 }
 
 uint8_t serial_rx_available(uint8_t portnum) {
-    if (portnum > MAX_PORTS || !ports[portnum]) {
-        return 0;
+    if (portnum >= MAX_PORTS || !ports[portnum]) {
+        errno = ENODEV;
+        return -1;
     }
     return (ports[portnum]->flags & RX_READY);
 }

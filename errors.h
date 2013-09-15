@@ -1,3 +1,6 @@
+#ifndef ERRORS_H_INCLUDED
+#define ERRORS_H_INCLUDED
+
 /* Copyright (C) 2013 David Zanetti
  *
  * This program is free software; you can redistribute it and/or modify
@@ -14,15 +17,17 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef GLOBAL_H_INCLUDED
-#define GLOBAL_H_INCLUDED
+#include <errno.h>
 
-#define F_CPU 32000000
+/** \file
+ *  \brief Error numbers we use in errno on top of the avr-libc
+ *  defined ones
+ */
 
-/** \brief Boolean type */
-typedef enum {
-    false,  /**< False */
-    true    /**< True */
-} bool_t;
+#define EIO 5 /**< I/O error */
+#define ENOMEM 12 /**< Out of memory */
+#define ENODEV 19 /**< No such device */
+#define EINVAL 22 /**< Invalid Argument */
+#define EBAUD 134 /**< Baud rate can't be achieved */
 
-#endif // GLOBAL_H_INCLUDED
+#endif // ERRORS_H_INCLUDED
