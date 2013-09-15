@@ -254,6 +254,7 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
             errno = EINVAL;
             return -1;
     }
+    stop--; /* SBMODE is 0 for 1 bit, 1 for 2 bits */
     switch (stop) {
         case 0:
         case 1:
