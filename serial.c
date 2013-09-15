@@ -32,9 +32,6 @@
 #include "ringbuffer.h"
 #include "errors.h"
 
-/* internal flags */
-#define RX_READY 1
-
 /** \file
  *  \brief USART driver implementation
  *
@@ -56,7 +53,6 @@ typedef struct {
 	ringbuffer_t *txring; /**< TX ringbuffer */
 	ringbuffer_t *rxring; /**< RX ringbuffer */
 	uint8_t isr_level; /**< Level to run/restore interrupts at */
-	uint8_t flags; /**< Current state of flags */
 	uint8_t features; /**< Capabilities of the port, see S_FEAT_ */
 	void (*rx_fn)(uint8_t); /**< Callback function for RX */
 } serial_port_t;
@@ -113,12 +109,13 @@ void _usart_rx_isr(serial_port_t *port) {
 
 	s = port->hw->DATA; /* read the char from the port */
 	ring_write_unsafe(port->rxring, s); /* if this fails we have nothing useful we can do anyway */
-	port->flags |= RX_READY; /* indicates to available we have RX */
+
 	if (port->features & S_FEAT_ECHO) {
 		/* fixme: does this introduce another source of ring corruption? */
 		ring_write_unsafe(port->txring,s);
 		_usart_tx_run(port);
 	}
+
 	/* invoke the callback if one exists */
 	if (port->rx_fn) {
 		(*port->rx_fn)(s);
@@ -225,6 +222,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	/* make sure low-level interrupts are enabled. Note: you still need to enable global interrupts */
 	PMIC.CTRL |= PMIC_LOLVLEX_bm;
 
+	errno = ENONE;
 	return 0;
 }
 
@@ -310,6 +308,7 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
 	/* end nicely borrowed code! */
 
 	/* all good! */
+	errno = ENONE;
 	return 0;
 }
 
@@ -332,6 +331,8 @@ uint8_t serial_run(uint8_t portnum, bool_t state) {
 			ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
 			break;
 	}
+
+	errno = ENONE;
 	return 0;
 }
 
@@ -344,6 +345,8 @@ uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t)) {
 
 	/* this is safe so long as RX is disabled */
 	ports[portnum]->rx_fn = fn;
+
+	errno = ENONE;
 	return 0;
 }
 
@@ -362,7 +365,6 @@ uint8_t serial_flush(uint8_t portnum) {
 
 	ring_reset(ports[portnum]->txring);
 	ring_reset(ports[portnum]->rxring);
-	ports[portnum]->flags = 0;
 
 	/* re-enable RX interrupts */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
@@ -371,6 +373,7 @@ uint8_t serial_flush(uint8_t portnum) {
 	/* re-enable the actual ports */
 	ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
 
+	errno = ENONE;
 	return 0;
 }
 
@@ -390,6 +393,8 @@ uint8_t serial_tx_cout(uint8_t portnum, char s) {
 
 	/* this re-enables DRE */
 	_usart_tx_run(ports[portnum]);
+
+	errno = ENONE;
 	return 0;
 }
 
@@ -414,6 +419,7 @@ uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len) {
 
 	_usart_tx_run(ports[portnum]);
 
+	errno = ENONE;
 	return 0;
 }
 
@@ -440,6 +446,7 @@ uint8_t serial_tx_PGM(uint8_t portnum, const char *str) {
 
 	_usart_tx_run(ports[portnum]);
 
+	errno = ENONE;
 	return 0;
 }
 
@@ -454,21 +461,22 @@ uint8_t serial_rx(uint8_t portnum) {
 		return -1; /* er, yeah, well.. *shrug* */
 	}
 
+	if (!ring_readable(ports[portnum]->rxring)) {
+		errno = EIO;
+		return -1; /* well, I guess */
+	}
+
 	/* protect this from interrupts also writing into the buffer */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)); /* disable RX interrupt */
 
 	/* grab next char from ring buffer */
 	c = ring_read(ports[portnum]->rxring);
 
-	/* if this is the last available char, clear the run flag */
-	if (!ring_readable(ports[portnum]->rxring)) {
-		ports[portnum]->flags &= RX_READY;
-	}
-
 	/* re-enable RX interrupt */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
 
 	/* return read character */
+	errno = ENONE;
 	return c;
 }
 
@@ -481,6 +489,7 @@ uint8_t serial_tx_hex(uint8_t portnum, uint8_t c) {
 	serial_tx_cout(portnum,hex[c >> 4]);
 	serial_tx_cout(portnum,hex[c & 0xf]);
 
+	errno = ENONE;
 	return 0;
 }
 
@@ -503,8 +512,8 @@ uint8_t serial_tx_dec(uint8_t portnum, uint32_t s) {
 		n++;
 	}
 
+	errno = ENONE;
 	return 0;
-
 }
 
 
@@ -520,5 +529,6 @@ uint8_t serial_rx_available(uint8_t portnum) {
 		return -1;
 	}
 
-	return (ports[portnum]->flags & RX_READY);
+	errno = ENONE;
+	return (ring_readable(ports[portnum]->rxring));
 }

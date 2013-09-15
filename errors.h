@@ -24,6 +24,7 @@
  *  defined ones
  */
 
+#define ENONE 0 /**< No error */
 #define EIO 5 /**< I/O error */
 #define ENOMEM 12 /**< Out of memory */
 #define ENODEV 19 /**< No such device */

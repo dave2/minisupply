@@ -139,7 +139,8 @@ uint8_t serial_rx_available(uint8_t portnum);
 /** \brief Return a single character from the port.
  *
  *  Since this has to be binary_safe, call serial_rx_available() before
- *  call this, since otherwise you'll get garbage
+ *  call this, since otherwise you'll get garbage. errno will be set
+ *  to EIO if this is called with nothing to read.
  *
  *  \param portnum Number of the port
  *  \return The character
