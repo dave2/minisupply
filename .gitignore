@@ -1,0 +1,10 @@
+*.o
+*.lst
+*.bin
+*.hex
+*.layout
+*.map
+*.eep
+*.elf
+*.cbp
+doxygen
