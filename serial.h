@@ -35,9 +35,9 @@
 
 /** \brief Enum for parity types */
 typedef enum {
-    none, /**< No parity */
-    even, /**< Even parity */
-    odd   /**< Odd parity */
+	none, /**< No parity */
+	even, /**< Even parity */
+	odd   /**< Odd parity */
 } parity_t;
 
 /* initalise serial port X */
@@ -59,7 +59,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
  *  \return 0 for success, check errno otherwise
  */
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
-                    parity_t parity, uint8_t stop, uint8_t features);
+	parity_t parity, uint8_t stop, uint8_t features);
 
 /** \brief Provide an RX hook to the interrupt for a given port
  *

@@ -102,7 +102,7 @@ uint8_t ring_write_unsafe(ringbuffer_t *ring, char s) {
 	} else {
 		return 0;
 	}
-    return 1;
+	return 1;
 }
 
 char ring_read(ringbuffer_t *ring) {

@@ -52,7 +52,7 @@
  *  \brief  Contains the abstraction of a hardware port
  */
 typedef struct {
-    USART_t *hw; /**< USART hardware IO registers */
+	USART_t *hw; /**< USART hardware IO registers */
 	ringbuffer_t *txring; /**< TX ringbuffer */
 	ringbuffer_t *rxring; /**< RX ringbuffer */
 	uint8_t isr_level; /**< Level to run/restore interrupts at */
@@ -121,7 +121,7 @@ void _usart_rx_isr(serial_port_t *port) {
 	}
 	/* invoke the callback if one exists */
 	if (port->rx_fn) {
-        (*port->rx_fn)(s);
+		(*port->rx_fn)(s);
 	}
 }
 
@@ -161,11 +161,11 @@ ISR(USARTD0_RXC_vect) {
 /* initalise the structures and hardware */
 uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 
-    if (ports[portnum] || portnum >= MAX_PORTS) {
-        /* refuse to re-initalise a port or one not allocatable */
-        errno = ENODEV;
-        return -1;
-    }
+	if (ports[portnum] || portnum >= MAX_PORTS) {
+		/* refuse to re-initalise a port or one not allocatable */
+		errno = ENODEV;
+		return -1;
+	}
 
 	/* create the metadata for the port */
 	ports[portnum] = malloc(sizeof(serial_port_t));
@@ -177,7 +177,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	/* create two ringbuffers, one for TX and one for RX */
 
 	ports[portnum]->rxring = ring_create(rx_size-1);
-    if (!ports[portnum]->rxring) {
+	if (!ports[portnum]->rxring) {
 		free(ports[portnum]);
 		ports[portnum] = NULL;
 		errno = ENOMEM;
@@ -194,29 +194,29 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	}
 
 	/* connect the hardware */
-    switch (portnum) {
-        case 0:
-            PR.PRPE &= ~(PR_USART0_bm);
-            PORTE.DIRSET = PIN3_bm;
-            PORTE.DIRCLR = PIN2_bm;
-            ports[portnum]->hw = &USARTE0;
-            break;
-        case 1:
-            PR.PRPD &= ~(PR_USART0_bm);
-            PORTD.DIRSET = PIN3_bm;
-            PORTD.DIRCLR = PIN2_bm;
-            ports[portnum]->hw = &USARTD0;
-            break;
-    }
+	switch (portnum) {
+		case 0:
+			PR.PRPE &= ~(PR_USART0_bm);
+			PORTE.DIRSET = PIN3_bm;
+			PORTE.DIRCLR = PIN2_bm;
+			ports[portnum]->hw = &USARTE0;
+			break;
+		case 1:
+			PR.PRPD &= ~(PR_USART0_bm);
+			PORTD.DIRSET = PIN3_bm;
+			PORTD.DIRCLR = PIN2_bm;
+			ports[portnum]->hw = &USARTD0;
+			break;
+	}
 
-    /* fixme: allow seperate interrupt levels for different ports */
+	/* fixme: allow seperate interrupt levels for different ports */
 	ports[portnum]->isr_level = USART_DREINTLVL_LO_gc | USART_RXCINTLVL_LO_gc; /* low prio interrupt */
 
 	/* default callback is NULL */
-    ports[portnum]->rx_fn = NULL;
+	ports[portnum]->rx_fn = NULL;
 
-    /* port has no features by default */
-    ports[portnum]->features = 0;
+	/* port has no features by default */
+	ports[portnum]->features = 0;
 
 	/* enable rx interrupts */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
@@ -229,126 +229,133 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 }
 
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
-                    parity_t parity, uint8_t stop, uint8_t features) {
-    uint8_t mode = 0;
-    uint32_t div1k;
-    uint8_t bscale = 0;
-    uint16_t bsel;
+	parity_t parity, uint8_t stop, uint8_t features) {
 
-    if (portnum > MAX_PORTS || !ports[portnum]) {
-        errno = ENODEV;
-        return -1;
-    }
-    switch (bits) {
-        case 5:
-        case 6:
-        case 7:
-        case 8:
-            mode = (bits - 5); /* cheating! */
-            break;
-        case 9:
-            /* technically unsupported but here is the code to set it */
-            mode = 7; /* cheating! */
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
-    }
-    stop--; /* SBMODE is 0 for 1 bit, 1 for 2 bits */
-    switch (stop) {
-        case 0:
-        case 1:
-            mode |= (stop & 1) << 3; /* more cheating */
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
-    }
-    switch (parity) {
-        case none:
-            break;
-        case even:
-            mode |= (2 << 4);
-            break;
-        case odd:
-            mode |= (3 << 4);
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
-    }
-    /* apply the cheating way we worked out the modes for the port */
-    ports[portnum]->hw->CTRLC = mode;
+	uint8_t mode = 0;
+	uint32_t div1k;
+	uint8_t bscale = 0;
+	uint16_t bsel;
 
-    /* apply features */
-    ports[portnum]->features = features;
+	if (portnum > MAX_PORTS || !ports[portnum]) {
+		errno = ENODEV;
+		return -1;
+	}
 
-    /* the following code comes from:
-     * http://blog.omegacs.net/2010/08/18/xmega-fractional-baud-rate-source-code/
-     */
-    if (baud > (F_CPU/16)) {
-        errno = EBAUD;
-        return -1;
-    }
+	switch (bits) {
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+			mode = (bits - 5); /* cheating! */
+			break;
+		case 9:
+			/* technically unsupported but here is the code to set it */
+			mode = 7; /* cheating! */
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
 
-    div1k = ((F_CPU*128) / baud) - 1024;
-    while ((div1k < 2096640) && (bscale < 7)) {
-        bscale++;
-        div1k <<= 1;
-    }
+	stop--; /* SBMODE is 0 for 1 bit, 1 for 2 bits */
+	switch (stop) {
+		case 0:
+		case 1:
+			mode |= (stop & 1) << 3; /* more cheating */
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
 
-    bsel = div1k >> 10;
+	switch (parity) {
+		case none:
+			break;
+		case even:
+			mode |= (2 << 4);
+			break;
+		case odd:
+			mode |= (3 << 4);
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
 
-    ports[portnum]->hw->BAUDCTRLA = bsel&0xff;
-    ports[portnum]->hw->BAUDCTRLB = (bsel>>8) | ((16-bscale) << 4); // was 16-bscale
+	/* apply the cheating way we worked out the modes for the port */
+	ports[portnum]->hw->CTRLC = mode;
 
-    /* end nicely borrowed code! */
+	/* apply features */
+	ports[portnum]->features = features;
 
-    /* all good! */
-    return 0;
+	/* the following code comes from:
+	 * http://blog.omegacs.net/2010/08/18/xmega-fractional-baud-rate-source-code/
+	 */
+	if (baud > (F_CPU/16)) {
+		errno = EBAUD;
+		return -1;
+	}
+
+	div1k = ((F_CPU*128) / baud) - 1024;
+	while ((div1k < 2096640) && (bscale < 7)) {
+		bscale++;
+		div1k <<= 1;
+	}
+
+	bsel = div1k >> 10;
+
+	ports[portnum]->hw->BAUDCTRLA = bsel&0xff;
+	ports[portnum]->hw->BAUDCTRLB = (bsel>>8) | ((16-bscale) << 4); // was 16-bscale
+
+	/* end nicely borrowed code! */
+
+	/* all good! */
+	return 0;
 }
 
 uint8_t serial_run(uint8_t portnum, bool_t state) {
-    if (portnum >= MAX_PORTS || !ports[portnum]) {
-        /* do nothing */
-        errno = ENODEV;
-        return -1;
-    }
-    switch (state) {
-        case false:
-            /* disable the TX/RX sides */
-            /* this will discard incoming traffic */
-            ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
-            /* don't worry about the interrupts, since we have disabled tx/rx */
-            break;
-        case true:
-            /* re-enable the TX/RX sides */
-            ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
-            break;
-    }
-    return 0;
+	if (portnum >= MAX_PORTS || !ports[portnum]) {
+		/* do nothing */
+		errno = ENODEV;
+		return -1;
+	}
+
+	switch (state) {
+		case false:
+			/* disable the TX/RX sides */
+			/* this will discard incoming traffic */
+			ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
+			/* don't worry about the interrupts, since we have disabled tx/rx */
+			break;
+		case true:
+			/* re-enable the TX/RX sides */
+			ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
+			break;
+	}
+	return 0;
 }
 
 /* install a new callback */
 uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t)) {
-    if (portnum > MAX_PORTS || !ports[portnum]) {
-        errno = ENODEV;
-        return -1;
-    }
-    /* this is safe so long as RX is disabled */
-    ports[portnum]->rx_fn = fn;
-    return 0;
+	if (portnum > MAX_PORTS || !ports[portnum]) {
+		errno = ENODEV;
+		return -1;
+	}
+
+	/* this is safe so long as RX is disabled */
+	ports[portnum]->rx_fn = fn;
+	return 0;
 }
 
 uint8_t serial_flush(uint8_t portnum) {
 
-    if (portnum >= MAX_PORTS || !ports[portnum]) {
-        errno = ENODEV;
-        return -1;
-    }
+	if (portnum >= MAX_PORTS || !ports[portnum]) {
+		errno = ENODEV;
+		return -1;
+	}
 
-    /* disable the TX/RX engines */
-    ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
+	/* disable the TX/RX engines */
+	ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
 
 	/* protect this from interrupts */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm | USART_DREINTLVL_gm));
@@ -361,8 +368,8 @@ uint8_t serial_flush(uint8_t portnum) {
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
 	/* for TX, since we just wiped the ring buffer, it has nothing to TX, so don't enable DRE */
 
-    /* re-enable the actual ports */
-    ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
+	/* re-enable the actual ports */
+	ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
 
 	return 0;
 }
@@ -416,10 +423,10 @@ uint8_t serial_tx_PGM(uint8_t portnum, const char *str) {
 	uint8_t n = 0;
 	char c;
 
-    if (portnum >= MAX_PORTS || !ports[portnum]) {
-        errno = ENODEV;
-        return -1;
-    }
+	if (portnum >= MAX_PORTS || !ports[portnum]) {
+		errno = ENODEV;
+		return -1;
+	}
 
 	/* disable interrupt while we write */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_DREINTLVL_gm));
@@ -443,7 +450,7 @@ uint8_t serial_rx(uint8_t portnum) {
 	char c;
 
 	if (portnum >= MAX_PORTS || !ports[portnum]) { /* safety check on the port */
-        errno = ENODEV;
+		errno = ENODEV;
 		return -1; /* er, yeah, well.. *shrug* */
 	}
 
@@ -455,7 +462,7 @@ uint8_t serial_rx(uint8_t portnum) {
 
 	/* if this is the last available char, clear the run flag */
 	if (!ring_readable(ports[portnum]->rxring)) {
-        ports[portnum]->flags &= RX_READY;
+		ports[portnum]->flags &= RX_READY;
 	}
 
 	/* re-enable RX interrupt */
@@ -470,7 +477,7 @@ uint8_t serial_rx(uint8_t portnum) {
 uint8_t serial_tx_hex(uint8_t portnum, uint8_t c) {
 	char hex[16] = "0123456789abcdef";
 
-    /* handle the port check inside the write code */
+	/* handle the port check inside the write code */
 	serial_tx_cout(portnum,hex[c >> 4]);
 	serial_tx_cout(portnum,hex[c & 0xf]);
 
@@ -490,7 +497,7 @@ uint8_t serial_tx_dec(uint8_t portnum, uint32_t s) {
 
 	ultoa(s, a, 10);
 
-    /* fixme, output this using string function instead */
+	/* fixme, output this using string function instead */
 	while (a[n]) {
 		serial_tx_cout(portnum,a[n]);
 		n++;
@@ -508,9 +515,10 @@ uint8_t serial_tx_cr(uint8_t portnum) {
 }
 
 uint8_t serial_rx_available(uint8_t portnum) {
-    if (portnum >= MAX_PORTS || !ports[portnum]) {
-        errno = ENODEV;
-        return -1;
-    }
-    return (ports[portnum]->flags & RX_READY);
+	if (portnum >= MAX_PORTS || !ports[portnum]) {
+		errno = ENODEV;
+		return -1;
+	}
+
+	return (ports[portnum]->flags & RX_READY);
 }
