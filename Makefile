@@ -16,10 +16,10 @@
 # Main project Makefile
 
 CC=/usr/bin/avr-gcc
-SVNDEF := -D'SVNVER="$(shell svnversion -n .)"'
+GITDEF := -D'GITVER="$(shell git show --format=%H | head -1)"'
 DATEDEF := -D'BUILDDATE="$(shell date +%Y%m%d)"'
 #DEBUG += -DDEBUG_FW_UPDATE
-CFLAGS= $(DEBUG) $(SVNDEF) $(DATEDEF) --std=c99 -Os -funroll-loops -Wa,-adhlns=$(<:.c=.lst) -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -Wstrict-prototypes -Wall -mcall-prologues -I.
+CFLAGS= $(DEBUG) $(GITDEF) $(DATEDEF) --std=c99 -Os -funroll-loops -Wa,-adhlns=$(<:.c=.lst) -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -Wstrict-prototypes -Wall -mcall-prologues -I.
 # because headers for 256d3 are wrong, but don't matter while compiling
 CFLAGS += -mmcu=atxmega192d3
 OBJ2HEX=/usr/bin/objcopy
