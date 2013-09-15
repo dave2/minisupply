@@ -229,7 +229,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 }
 
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
-                    uint8_t stop, uint8_t parity, uint8_t features) {
+                    parity_t parity, uint8_t stop, uint8_t features) {
     uint8_t mode = 0;
     uint32_t div1k;
     uint8_t bscale = 0;

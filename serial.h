@@ -53,8 +53,8 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
  *  \param portnum Number of the port
  *  \param baud Baudrate
  *  \param bits Bits per char (note: 9 is not supported)
- *  \param stop Stop bits
  *  \param parity Parity mode (none, even, odd)
+ *  \param stop Stop bits
  *  \param features Features (see S_FEAT_*)
  *  \return 0 for success, check errno otherwise
  */
