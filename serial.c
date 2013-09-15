@@ -34,7 +34,6 @@
 
 /* internal flags */
 #define RX_READY 1
-#define SEEN_CMD 2
 
 /* hw access, buffers, and metadata about a serial port */
 
@@ -50,6 +49,7 @@ typedef struct {
 	uint8_t isr_level; /**< Level to run/restore interrupts at */
 	uint8_t flags; /**< Current state of flags */
 	uint8_t features; /**< Capabilities of the port, see S_FEAT_ */
+	void (*rx_fn)(uint8_t); /**< Callback function for RX */
 } serial_port_t;
 
 #define MAX_PORTS 2 /**< Maximum number of serial ports supported */
@@ -147,14 +147,15 @@ void _usart_rx_isr(serial_port_t *port) {
 
 	s = port->hw->DATA; /* read the char from the port */
 	ring_write_unsafe(port->rxring, s); /* if this fails we have nothing useful we can do anyway */
-	if (s == '\r' && (port->features & S_FEAT_CMD)) {
-        port->flags |= SEEN_CMD;
-	}
 	port->flags |= RX_READY; /* indicates to available we have RX */
 	if (port->features & S_FEAT_ECHO) {
 		/* fixme: does this introduce another source of ring corruption? */
 		ring_write_unsafe(port->txring,s);
 		_usart_tx_run(port);
+	}
+	/* invoke the callback if one exists */
+	if (port->rx_fn) {
+        (*port->rx_fn)(s);
 	}
 }
 
@@ -169,23 +170,23 @@ void _usart_tx_run(serial_port_t *port) {
 
 /* interrupt handler for packets on TX USARTF0 */
 ISR(USARTE0_DRE_vect) {
-	_usart_tx_isr(ports[0]); /* USARTF0 is serial0 in our code */
+	_usart_tx_isr(ports[0]); /* USARTE0 is serial0 in our code */
 	return;
 }
 
 /* interrupt handler for packets on RX USARTF0 */
 ISR(USARTE0_RXC_vect) {
-	_usart_rx_isr(ports[0]); /* USARTF0 is serial0 in our code */
+	_usart_rx_isr(ports[0]); /* USARTE0 is serial0 in our code */
 	return;
 }
 
-/* interrupt handler for packets on TX USARTC0 */
+/* interrupt handler for packets on TX USARTD0 */
 ISR(USARTD0_DRE_vect) {
 	_usart_tx_isr(ports[1]);
 	return;
 }
 
-/* interrupt handler for packets on RX USARTC0 */
+/* interrupt handler for packets on RX USARTD0 */
 ISR(USARTD0_RXC_vect) {
 	_usart_rx_isr(ports[1]);
 	return;
@@ -225,8 +226,10 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	/* connect the hardware */
     switch (portnum) {
         case 0:
-            ports[portnum]->pr = &PR_PRPE;
-            ports[portnum]->pr_num = PR_USART0_bm;
+            //ports[portnum]->pr = &PR_PRPE;
+            //ports[portnum]->pr_num = PR_USART0_bm;
+            PR.PRPE &= ~(PR_USART0_bm);
+            //*(ports[portnum]->pr) &= ~(ports[portnum]->pr_num);
             PORTE.DIRSET = PIN3_bm;
             PORTE.DIRCLR = PIN2_bm;
             ports[portnum]->hw = &USARTE0;
@@ -245,6 +248,7 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 
 	/* enable rx interrupts */
 	ports[portnum]->hw->CTRLA = (ports[portnum]->hw->CTRLA & ~(USART_RXCINTLVL_gm)) | (ports[portnum]->isr_level & USART_RXCINTLVL_gm);
+	ports[portnum]->hw->CTRLB |= USART_CLK2X_bm;
 
 	/* make sure low-level interrupts are enabled. Note: you still need to enable global interrupts */
 	PMIC.CTRL |= PMIC_LOLVLEX_bm;
@@ -302,6 +306,9 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
     /* apply features */
     ports[portnum]->features = features;
 
+    /* default callback is NULL */
+    ports[portnum]->rx_fn = NULL;
+
     /* the following code comes from:
      * http://blog.omegacs.net/2010/08/18/xmega-fractional-baud-rate-source-code/
      */
@@ -318,7 +325,7 @@ uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
     bsel = div1k >> 10;
 
     ports[portnum]->hw->BAUDCTRLA = bsel&0xff;
-    ports[portnum]->hw->BAUDCTRLB = (bsel>>8) | ((16-bscale) << 4);
+    ports[portnum]->hw->BAUDCTRLB = (bsel>>8) | ((16-bscale) << 4); // was 16-bscale
 
     /* end nicely borrowed code! */
 
@@ -337,16 +344,25 @@ void serial_run(uint8_t portnum, uint8_t state) {
             ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
             /* don't worry about the interrupts, since we have disabled tx/rx */
             /* shutdown the HW */
-            *(ports[portnum]->pr) |= ports[portnum]->pr_num;
+            //*(ports[portnum]->pr) |= ports[portnum]->pr_num;
             break;
         case 1:
             /* re-enable the hardware */
-            *(ports[portnum]->pr) &= ~(ports[portnum]->pr_num);
+            //*(ports[portnum]->pr) &= ~(ports[portnum]->pr_num);
             /* now re-enable the modules */
             ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
             break;
     }
     return;
+}
+
+/* install a new callback */
+uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t)) {
+    if (portnum > MAX_PORTS || !ports[portnum]) {
+        return 0;
+    }
+    ports[portnum]->rx_fn = fn;
+    return 1;
 }
 
 void serial_flush(uint8_t portnum) {
@@ -506,3 +522,9 @@ uint8_t serial_tx_cr(uint8_t portnum) {
 	return serial_tx_PGM(portnum,PSTR("\r\n"));
 }
 
+uint8_t serial_rx_available(uint8_t portnum) {
+    if (portnum > MAX_PORTS || !ports[portnum]) {
+        return 0;
+    }
+    return (ports[portnum]->flags & RX_READY);
+}

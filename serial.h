@@ -21,7 +21,6 @@
 
 #define S_FEAT_NONE 0 /**< Serial port feature: None */
 #define S_FEAT_ECHO 1 /**< Serial port feature: echoback inside driver */
-#define S_FEAT_CMD 2 /**< Serial port feature: report seeing \\n */
 
 #define S_PARITY_NONE 0 /**< No parity */
 #define S_PARITY_EVEN 1 /**< Even parity */
@@ -47,6 +46,21 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
  */
 uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
                     uint8_t stop, uint8_t parity, uint8_t features);
+
+/** \brief Provide an RX hook to the interrupt for a given port
+ *
+ *  The hook function will execute inside the interrupt for the RX, try
+ *  not to do any heavy lifting. Provide NULL as the function hook to
+ *  clear it.
+ *
+ *  Note: this MUST be called when the port is suspended or bad things
+ *  may happen.
+ *  \param portnum Number of the port
+ *  \param fn Function to execute. It must return void and accept
+ *         a single uint8_t argument containing most recent char.
+ *  \return 1 if hook loaded successfully, 0 if not
+ */
+uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t));
 
 /** \brief Start listening for events and characters, also allows
  *  TX to begin
@@ -98,11 +112,9 @@ uint8_t serial_tx_cr(uint8_t portnum);
 
 /** \brief Test if there are unread characters in the buffer
  *  \param portnum Number of the port
- *  \param features Only return if the given feature is triggered.
- *          This will reset the flag for the feature.
  *  \return 1 if there are unread characters, 0 otherwise
  */
-uint8_t serial_rx_available(uint8_t portnum, uint8_t features);
+uint8_t serial_rx_available(uint8_t portnum);
 
 /** \brief Return a single character from the port.
  *
