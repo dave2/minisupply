@@ -19,6 +19,17 @@
 #ifndef SERIAL_H_INCLUDED
 #define SERIAL_H_INCLUDED
 
+/** \file
+ *  \brief USART driver public API
+ *
+ *  Interrupt-driven USART driver with runtime baud rate calculation,
+ *  flexible TX/RX buffering, and RX interrupt call hooks to faciliate
+ *  integration in main loop processing.
+ *
+ *  Can be easily expanded to cover more ports than the 2 currently
+ *  implemented, as all code is generic
+ */
+
 #define S_FEAT_NONE 0 /**< Serial port feature: None */
 #define S_FEAT_ECHO 1 /**< Serial port feature: echoback inside driver */
 

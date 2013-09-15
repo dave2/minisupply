@@ -1,6 +1,6 @@
 /* Serial driver */
 
-/* Copyright (C) 2009-2012 David Zanetti
+/* Copyright (C) 2009-2013 David Zanetti
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -35,6 +35,17 @@
 /* internal flags */
 #define RX_READY 1
 
+/** \file
+ *  \brief USART driver implementation
+ *
+ *  Interrupt-driven USART driver with runtime baud rate calculation,
+ *  flexible TX/RX buffering, and RX interrupt call hooks to faciliate
+ *  integration in main loop processing.
+ *
+ *  Can be easily expanded to cover more ports than the 2 currently
+ *  implemented, as all code is generic
+ */
+
 /* hw access, buffers, and metadata about a serial port */
 
 /** \struct serial_port_t
@@ -44,8 +55,6 @@ typedef struct {
     USART_t *hw; /**< USART hardware IO registers */
 	ringbuffer_t *txring; /**< TX ringbuffer */
 	ringbuffer_t *rxring; /**< RX ringbuffer */
-	register8_t *pr; /**< power reduction register to use */
-	uint8_t pr_num; /**< what to fiddle in PR register */
 	uint8_t isr_level; /**< Level to run/restore interrupts at */
 	uint8_t flags; /**< Current state of flags */
 	uint8_t features; /**< Capabilities of the port, see S_FEAT_ */
@@ -75,49 +84,6 @@ void _usart_rx_isr(serial_port_t *port);
  *  \param port Port abstraction this event applies to
  */
 void _usart_tx_run(serial_port_t *port);
-
-/* high-level API handling */
-
-/** \brief Send single character to port
- *  \param port Serial port to use
- *  \param s The character
- */
-uint8_t _tx_cout(serial_port_t *port, char s);
-
-/** \brief Send a string to port
- *  \param port Serial port to use
- *  \param str The string (does not need to be NUL terminated)
- *  \param len Length of the string
- */
-uint8_t _tx(serial_port_t *port, const char *str, uint8_t len);
-
-/** \brief Send a string from flash space to port
- *  \param port Serial port to use
- *  \param str String in flash space (must be NUL terminated)
- */
-uint8_t _tx_PGM(serial_port_t *port, const char *str);
-
-/** \brief Send a number reformated as hexadecimal to port
- *  \param port Serial port to use
- *  \param c 8-bit number to send
- */
-uint8_t _tx_hex(serial_port_t *port, uint8_t c);
-
-/** \brief Send a number reformatted as integer to port
- *  \param port Serial port to use
- *  \param s 32-bit int to send
- */
-uint8_t _tx_dec(serial_port_t *port, uint32_t s);
-
-/** \brief Send a newline to port
- *  \param port Serial port to use
- */
-uint8_t _tx_cr(serial_port_t *port);
-
-/** \brief Flush the given serial port buffer
- *  \param port Serial port to flush
- */
-void _flush(serial_port_t *port);
 
 /* Interrupt hooks and handlers */
 
@@ -226,17 +192,13 @@ uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size) {
 	/* connect the hardware */
     switch (portnum) {
         case 0:
-            //ports[portnum]->pr = &PR_PRPE;
-            //ports[portnum]->pr_num = PR_USART0_bm;
             PR.PRPE &= ~(PR_USART0_bm);
-            //*(ports[portnum]->pr) &= ~(ports[portnum]->pr_num);
             PORTE.DIRSET = PIN3_bm;
             PORTE.DIRCLR = PIN2_bm;
             ports[portnum]->hw = &USARTE0;
             break;
         case 1:
-            ports[portnum]->pr = &PR_PRPD;
-            ports[portnum]->pr_num = PR_USART0_bm;
+            PR.PRPD &= ~(PR_USART0_bm);
             PORTD.DIRSET = PIN3_bm;
             PORTD.DIRCLR = PIN2_bm;
             ports[portnum]->hw = &USARTD0;
@@ -340,16 +302,13 @@ void serial_run(uint8_t portnum, uint8_t state) {
     }
     switch (state) {
         case 0:
-            /* disable the TX/RX sides, so we come out disabled */
+            /* disable the TX/RX sides */
+            /* this will discard incoming traffic */
             ports[portnum]->hw->CTRLB &= ~(USART_RXEN_bm | USART_TXEN_bm);
             /* don't worry about the interrupts, since we have disabled tx/rx */
-            /* shutdown the HW */
-            //*(ports[portnum]->pr) |= ports[portnum]->pr_num;
             break;
         case 1:
-            /* re-enable the hardware */
-            //*(ports[portnum]->pr) &= ~(ports[portnum]->pr_num);
-            /* now re-enable the modules */
+            /* re-enable the TX/RX sides */
             ports[portnum]->hw->CTRLB |= (USART_RXEN_bm | USART_TXEN_bm);
             break;
     }
@@ -361,6 +320,7 @@ uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t)) {
     if (portnum > MAX_PORTS || !ports[portnum]) {
         return 0;
     }
+    /* this is safe so long as RX is disabled */
     ports[portnum]->rx_fn = fn;
     return 1;
 }
