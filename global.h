@@ -21,8 +21,8 @@
 
 /** \brief Boolean type */
 typedef enum {
-    false,  /**< False */
-    true    /**< True */
+    false,
+    true
 } bool_t;
 
 #endif // GLOBAL_H_INCLUDED
