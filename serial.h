@@ -24,7 +24,14 @@
  *
  *  Interrupt-driven USART driver with runtime baud rate calculation,
  *  flexible TX/RX buffering, and RX interrupt call hooks to faciliate
- *  integration in main loop processing.
+ *  integration in main loop processing. It creates FILE *stream
+ *  pointers suitable for avr-libc <stdio.h> functions.
+ *
+ *  Process of using a port is:
+ *  + serial_init(); to prepare the internal structures
+ *  + serial_conf(); to configure baud, bits, parity etc.
+ *  + serial_map_stdio(); returns a FILE * suitable for stdio functions
+ *  + serial_run(); to get things going
  *
  *  Can be easily expanded to cover more ports than the 2 currently
  *  implemented, as all code is generic
@@ -45,106 +52,52 @@ typedef enum {
  *  \param portnum Number of the port
  *  \param rx_size Size of the RX buffer (must be power of two)
  *  \param tx_size Size of the TX buffer (must be power of two)
- *  \return 0 for success, check errno otherwise
+ *  \return 0 for success, negative errors.h values otherwise
  */
-uint8_t serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
+int serial_init(uint8_t portnum, uint8_t rx_size, uint8_t tx_size);
 
 /** \brief Set parameters for the port, speed and such like
+ *
+ *  This must be called when the port is suspended or very bad things
+ *  will happen. It *can* be called on a port which has been associated
+ *  with a stream.
+ *
  *  \param portnum Number of the port
  *  \param baud Baudrate
  *  \param bits Bits per char (note: 9 is not supported)
  *  \param parity Parity mode (none, even, odd)
  *  \param stop Stop bits
  *  \param features Features (see S_FEAT_*)
- *  \return 0 for success, check errno otherwise
+ *  \param rxfn Pointer to function for RX interrupt hook, NULL for no
+ *  hook. Must return void, accept uint8_t of current char.
+ *  \return 0 for success, negative errors.h values otherwise
  */
-uint8_t serial_mode(uint8_t portnum, uint32_t baud, uint8_t bits,
-	parity_t parity, uint8_t stop, uint8_t features);
-
-/** \brief Provide an RX hook to the interrupt for a given port
- *
- *  The hook function will execute inside the interrupt for the RX, try
- *  not to do any heavy lifting. Provide NULL as the function hook to
- *  clear it.
- *
- *  Note: this MUST be called when the port is suspended or bad things
- *  may happen.
- *  \param portnum Number of the port
- *  \param fn Function to execute. It must return void and accept
- *         a single uint8_t argument containing most recent char.
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_rx_hook(uint8_t portnum, void (*fn)(uint8_t));
+int serial_conf(uint8_t portnum, uint32_t baud, uint8_t bits,
+	parity_t parity, uint8_t stop, uint8_t features, void (*rxfn)(uint8_t));
 
 /** \brief Start listening for events and characters, also allows
  *  TX to begin
  *  \param portnum Number of the port
  *  \param state boolean, true or false
  */
-uint8_t serial_run(uint8_t portnum, bool_t state);
+int serial_run(uint8_t portnum, bool_t state);
 
 /** \brief Flush the buffers for the serial port
  *  \param portnum Number of the port
+ *  \return 0 for success, negative errors.h values otherwise
  */
-uint8_t serial_flush(uint8_t portnum);
+int serial_flush(uint8_t portnum);
 
-/** \brief Send a single character to a serial port
- *  \param portnum Number of the port
- *  \param s Character to send
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx_cout(uint8_t portnum, char s);
-
-/** \brief Send a string to a serial port
- *  \param portnum Number of the port
- *  \param str String to send (does not need NUL termination)
- *  \param len Length of the string
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx(uint8_t portnum, const char *str, uint8_t len);
-
-/** \brief Send a string to a serial port from flash space
- *  \param portnum Number of the port
- *  \param str String to send (must be in flash, must be NUL terminated)
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx_PGM(uint8_t portnum, const char *str);
-
-/** \brief Send a number as a hexidecimal string to a serial port
- *  \param portnum Number of the port
- *  \param s Value to convert to string and send
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx_hex(uint8_t portnum, uint8_t s);
-
-/** \brief Send a number as a decimal string to a serial port
- *  \param portnum Number of the port
- *  \param s Value to convert to string and send
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx_dec(uint8_t portnum, uint32_t s);
-
-/** \brief Send a newline/return to a serial port
- *  \param portnum Number of the port
- *  \return 0 for success, check errno otherwise
- */
-uint8_t serial_tx_cr(uint8_t portnum);
-
-/** \brief Test if there are unread characters in the buffer
- *  \param portnum Number of the port
- *  \return 1 if there are unread characters, 0 otherwise
- */
-uint8_t serial_rx_available(uint8_t portnum);
-
-/** \brief Return a single character from the port.
+/** \brief Associate a serial port with a stdio stream
  *
- *  Since this has to be binary_safe, call serial_rx_available() before
- *  call this, since otherwise you'll get garbage. errno will be set
- *  to EIO if this is called with nothing to read.
+ *  This allows libc <stdio.h> functions to be used with
+ *  the port. Similar to avr-libc behaviour, the first call to this will
+ *  be nominated as stdout, stdin, and stderr. Subsequent calls will
+ *  be unique streams.
  *
  *  \param portnum Number of the port
- *  \return The character
+ *  \return FILE handle, NULL if allocated failed
  */
-uint8_t serial_rx(uint8_t portnum);
+FILE *serial_map_stdio(uint8_t portnum);
 
 #endif // SERIAL_H_INCLUDED
