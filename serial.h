@@ -28,9 +28,13 @@
  *  pointers suitable for avr-libc <stdio.h> functions.
  *
  *  Process of using a port is:
+ *
  *  + serial_init(); to prepare the internal structures
+ *
  *  + serial_conf(); to configure baud, bits, parity etc.
+ *
  *  + serial_map_stdio(); returns a FILE * suitable for stdio functions
+ *
  *  + serial_run(); to get things going
  *
  *  Can be easily expanded to cover more ports than the 2 currently
