@@ -19,6 +19,7 @@ CC=/usr/bin/avr-gcc
 GITDEF := -D'GITVER="$(shell git show --format=%H | head -1)"'
 DATEDEF := -D'BUILDDATE="$(shell date +%Y%m%d%H%M%S)"'
 #DEBUG += -DDEBUG_FW_UPDATE
+DEBUG += -DDEBUG_ADC
 CFLAGS= $(DEBUG) $(GITDEF) $(DATEDEF) --std=c99 -Os -funroll-loops -Wa,-adhlns=$(<:.c=.lst) -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -Wstrict-prototypes -Wall -mcall-prologues -I.
 # because headers for 256d3 are wrong, but don't matter while compiling
 CFLAGS += -mmcu=atxmega192d3
@@ -33,7 +34,7 @@ AVRDUDE = /usr/local/bin/avrdude $(AVRFLAGS)
 # main loop
 OBJ += main.o
 # libraries
-OBJ += ringbuffer.o serial.o
+OBJ += ringbuffer.o serial.o adc.o
 
 #LDFLAGS = -Wl,-Map=$(TARGET).map -Wl,--cref -Wl,-u,vfprintf -lprintf_flt -lm
 LDFLAGS = -Wl,-Map=$(TARGET).map -Wl,--cref
