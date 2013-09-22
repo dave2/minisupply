@@ -54,6 +54,14 @@ typedef enum {
 	timer_pwm_dsbot, /**< PWM: Dual Slope, OVF/Event at bottom */
 } timer_pwm_t;
 
+/** \brief Timer channels */
+typedef enum {
+	timer_ch_a = 0, /**< Channel A */
+	timer_ch_b, /**< Channel B */
+	timer_ch_c, /**< Channel C, Type 0 only */
+	timer_ch_d, /**< Channel D, Type 0 only */
+} timer_chan_t;
+
 /** \brief Initialise the given timer slot
  *  \param timernum Number of the timer
  *  \param mode Timer mode (normal, pwm, etc)
@@ -84,13 +92,13 @@ uint8_t timer_clk(uint8_t timernum, timer_clk_src_t clk);
  *  running.
  *
  *  \param timernum Number of the timer
- *  \param ch Channel number
+ *  \param ch Channel
  *  \param value Value to compare against
  *  \param cmp_hook Compare hook function.
  *  \param cmp_ev Event channel to strobe on compare. -1 is none.
  *  \return 0 for success, errors.h otherwise
  */
-uint8_t timer_comp(uint8_t timernum, uint8_t ch, uint16_t value,
+uint8_t timer_comp(uint8_t timernum, timer_chan_t ch, uint16_t value,
 	void (*cmp_hook)(uint8_t), uint8_t cmp_ev);
 
 /** \brief set the given channel overflow behaviour
@@ -116,11 +124,11 @@ uint8_t timer_ovf(uint8_t timernum, void (*ovf_hook)(uint8_t),
  *  change the compare value for the channel.
  *
  *  \param timernum Number of the timer
- *  \param ch Channel number
+ *  \param ch Channel
  *  \param value Compare value
  *  \return 0 for success, errors.h otherwise
  */
-uint8_t timer_comp_val(uint8_t timernum, uint8_t ch, uint16_t value);
+uint8_t timer_comp_val(uint8_t timernum, timer_chan_t ch, uint16_t value);
 
 /** \brief Force a specific count value
  *

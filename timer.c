@@ -121,7 +121,7 @@ uint8_t timer_clk(uint8_t timernum, timer_clk_src_t clk) {
 }
 
 /* set up compares */
-uint8_t timer_comp(uint8_t timernum, uint8_t ch, uint16_t value,
+uint8_t timer_comp(uint8_t timernum, timer_chan_t ch, uint16_t value,
 	void (*cmp_hook)(uint8_t), uint8_t cmp_ev) {
 
 	if (timernum >= TIMER_MAX || !timers[timernum]) {
@@ -135,14 +135,14 @@ uint8_t timer_comp(uint8_t timernum, uint8_t ch, uint16_t value,
 	switch (timers[timernum]->type) {
 		case 1:
 			switch (ch) {
-				case 0:
+				case timer_ch_a:
 					timers[timernum]->hw.hw1->CCABUF = value;
 					timers[timernum]->hw.hw1->CTRLB |= TC1_CCAEN_bm;
 					if (cmp_ev < MAX_EVENT) {
 						*(&EVSYS_CH0MUX+cmp_ev) = TIM0_EV_CMPA;
 					}
 					break;
-				case 1:
+				case timer_ch_b:
 					timers[timernum]->hw.hw1->CCBBUF = value;
 					timers[timernum]->hw.hw1->CTRLB |= TC1_CCBEN_bm;
 					if (cmp_ev < MAX_EVENT) {
@@ -161,7 +161,7 @@ uint8_t timer_comp(uint8_t timernum, uint8_t ch, uint16_t value,
 }
 
 /* change just the compare value */
-uint8_t timer_comp_val(uint8_t timernum, uint8_t ch, uint16_t value) {
+uint8_t timer_comp_val(uint8_t timernum, timer_chan_t ch, uint16_t value) {
 
 	if (timernum >= TIMER_MAX || !timers[timernum]) {
 		return ENODEV;
@@ -171,11 +171,11 @@ uint8_t timer_comp_val(uint8_t timernum, uint8_t ch, uint16_t value) {
 	switch (timers[timernum]->type) {
 		case 1:
 			switch (ch) {
-				case 0:
+				case timer_ch_a:
 					timers[timernum]->hw.hw1->CCA = value;
 					timers[timernum]->hw.hw1->CTRLB |= TC1_CCAEN_bm;
 					break;
-				case 1:
+				case timer_ch_b:
 					timers[timernum]->hw.hw1->CCB = value;
 					timers[timernum]->hw.hw1->CTRLB |= TC1_CCBEN_bm;
 					break;
