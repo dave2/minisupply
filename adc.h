@@ -94,8 +94,10 @@ uint8_t adc_conf(uint8_t chan, adc_input_t input, uint8_t muxpos,
  *  Once conversion parameters are set, perform a conversion in
  *  blocking mode. The result is returned, or errors.h
  *  \param chan Channel number
+ *  \param discard Discard this many passes before converting
+ *  \param count Average over count samples
  *  \return ADC value
  */
-uint16_t adc_conv_blocking(uint8_t chan);
+uint16_t adc_conv_blocking(uint8_t chan, uint8_t discard, uint8_t count);
 
 #endif // ADC_H_INCLUDED

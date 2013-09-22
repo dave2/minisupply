@@ -32,6 +32,15 @@
 
 #define MAX_CHANS 1
 
+uint16_t adc_gnd_offset = 0; /**< ADC offset from GND */
+
+/** \brief What to pass to adc_conf() to sense ground */
+#define ADC_INPUT_GND 0,adc_singleend,0,0
+/** \brief What to pass to adc_conf() to send 1.0V bandgap */
+#define ADC_INPUT_1V 0,adc_internal,1,0
+/** \brief What ADC value we expect for 1.0V from ADC, after ground conversion */
+#define ADC_1V_EXPECTED 1638
+
 /** \brief Retrieve calibration words from production row
  *  \param offset offset into signatures
  */
@@ -105,6 +114,18 @@ uint8_t adc_init(adc_mode_t mode, adc_vref_t vref, uint8_t bits,
 	/* now enable the module, and we're done */
 	ADCA.CTRLA |= ADC_ENABLE_bm;
 
+	/* perform runtime calibration as is required to make ADC results vaguely
+	 * correct */
+
+	/* Measure GND, for unsigned modes, signed does not require this */
+	if (mode == adc_unsigned) {
+		adc_conf(ADC_INPUT_GND);
+		adc_gnd_offset = adc_conv_blocking(0,10,20);
+#ifdef DEBUG_ADC
+		printf_P(PSTR("adc: gnd %d\r\n"),adc_gnd_offset);
+#endif // DEBUG_ADC
+	};
+
 	return 0;
 }
 
@@ -130,6 +151,13 @@ uint8_t adc_conf(uint8_t chan, adc_input_t input, uint8_t muxpos,
 		case 0:
 			ADCA.CH0.CTRL = input; /* input is at the botom */
 			ADCA.CH0.MUXCTRL = (muxpos << 3) | (muxneg);
+			if (input == adc_internal && muxpos == 1) {
+				/* power up bandgap */
+				ADCA.REFCTRL |= ADC_BANDGAP_bm;
+				_delay_ms(5); /* give it time to wake */
+			} else {
+				ADCA.REFCTRL &= ~ADC_BANDGAP_bm;
+			}
 			break;
 	}
 	return 0;
@@ -138,10 +166,41 @@ uint8_t adc_conf(uint8_t chan, adc_input_t input, uint8_t muxpos,
 /* blocking ADC conversion. Note: testing only, with interrupts enabled this
  * blocking code doesn't work
  */
-uint16_t adc_conv_blocking(uint8_t chan) {
-	/* start the conversion, then poll interrupt bit until it's done */
-	ADCA.CH0.CTRL |= ADC_CH_START_bm;
-	while (!(ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm));
+uint16_t adc_conv_blocking(uint8_t chan, uint8_t discard, uint8_t count) {
+	int16_t val = 0;
+	uint8_t n = 0;
+
+	/* discard n samples */
+	if (discard) {
+		while (discard--) {
+			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+			while (!(ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm));
+			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+		}
+	}
+	/* loop over collecting samples until we meet our quota for averaging */
+	while (count--) {
+			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+			while (!(ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm));
+			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+			val = (val + (int16_t) ADCA.CH0.RES);
+			if (n) {
+				val = val / 2;
+			} else {
+				n = 1;
+			}
+	}
+
+	/* fixme: we shouldn't need to do this according to the datasheet.. but we
+	 * do, or there's quite noticable error? */
+	if (adc_gnd_offset) {
+		val -= adc_gnd_offset;
+	}
+
+#ifdef DEBUG_ADC
+	printf_P(PSTR("adc: %d\r\n"),val);
+#endif
+
 	/* conversion is done, return the result */
-	return ADCA.CH0.RES;
+	return val;
 }
